@@ -81,7 +81,7 @@
     // Google Sheets Configuration - YOU WILL NEED TO UPDATE THESE
     const SPREADSHEET_ID = '1ftW6sDYjwkapI7_mfaDmxReT0xZt_mvzmNlQwMjWpwI'; // You'll get this from your Google Sheet URL
     const API_KEY = 'AIzaSyAiuW33D33_Y8YIr5y6kqX4CYihKgTNUhk'; // You'll create this in Google Cloud Console
-
+    const SHEET_RANGE = 'WorkoutData!A1:G11';
     // DOM Elements
     const loginScreen = document.getElementById('loginScreen');
     const appScreen = document.getElementById('appScreen');
@@ -132,70 +132,116 @@
         renderWorkoutGrid(user);
     }
 
+    // Show/hide loading indicator
+    function showLoading(isLoading) {
+        const loadingElement = document.getElementById('loadingIndicator') || createLoadingElement();
+        loadingElement.style.display = isLoading ? 'flex' : 'none';
+    }
+
+    // Create loading element if it doesn't exist
+    function createLoadingElement() {
+        const loadingDiv = document.createElement('div');
+        loadingDiv.id = 'loadingIndicator';
+        loadingDiv.style.display = 'none';
+        loadingDiv.style.position = 'fixed';
+        loadingDiv.style.top = '0';
+        loadingDiv.style.left = '0';
+        loadingDiv.style.right = '0';
+        loadingDiv.style.bottom = '0';
+        loadingDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        loadingDiv.style.justifyContent = 'center';
+        loadingDiv.style.alignItems = 'center';
+        loadingDiv.style.zIndex = '1000';
+        loadingDiv.innerHTML = '<div style="color: white; font-size: 1.5rem;">Loading...</div>';
+        document.body.appendChild(loadingDiv);
+        return loadingDiv;
+    }
+
+    // Transform sheet data to our format
+    function transformSheetData(sheetValues) {
+        if (!sheetValues || sheetValues.length < 2) return [];
+        
+        const headers = sheetValues[0]; // First row: Exercise, Target, Mohammed, etc.
+        return sheetValues.slice(1).map((row, index) => {
+            const obj = { 
+                exercise: row[0] || '', 
+                target: row[1] || '',
+                rowIndex: index + 2 // +2 because header row + 1-based indexing
+            };
+            
+            // Add user statuses
+            headers.slice(2, 6).forEach((header, colIndex) => {
+                obj[header] = (row[colIndex + 2] || '❌').trim();
+            });
+            
+            return obj;
+        }).filter(exercise => exercise.exercise); // Remove empty rows
+    }
+
     // Load workout data from Google Sheets
     async function loadWorkoutData() {
+        showLoading(true);
         try {
-            // For now, we'll use mock data. Replace this with actual Sheets API call
-            workoutData = await getMockWorkoutData();
+            console.log('🔍 Fetching data from Google Sheets...');
+            const data = await fetchSheetData();
+            console.log('📊 Raw data from sheet:', data);
             
-            // Uncomment this when you have your Google Sheets setup:
-            // workoutData = await fetchSheetData();
+            if (!data || !data.values) {
+                throw new Error('No data.values in response');
+            }
             
+            workoutData = transformSheetData(data.values);
+            console.log('✅ Transformed workout data:', workoutData);
+            
+            if (workoutData.length === 0) {
+                console.warn('⚠️ No workout data found after transformation');
+            }
+            
+            return workoutData;
         } catch (error) {
-            console.error('Error loading workout data:', error);
-            // Fallback to mock data
-            workoutData = await getMockWorkoutData();
+            console.error('❌ Failed to load sheet data:', error);
+            // Don't use mock data - just show empty
+            workoutData = [];
+            alert('Failed to load workout data. Check console for details.');
+            throw error; // Re-throw to be caught by the caller
+        } finally {
+            showLoading(false);
         }
     }
 
-    // Mock data for testing (remove when Sheets is ready)
-    async function getMockWorkoutData() {
-        return [
-            { 
-                exercise: 'Pushups (Standard)', 
-                target: '4x25',
-                Mohammed: '❌', Ilyass: '✅', Souhayl: '❌', Hamza: '✅'
-            },
-            { 
-                exercise: 'Pushups (Wide)', 
-                target: '4x25',
-                Mohammed: '✅', Ilyass: '❌', Souhayl: '✅', Hamza: '❌'
-            },
-            { 
-                exercise: 'Pushups (Diamond)', 
-                target: '4x25',
-                Mohammed: '❌', Ilyass: '❌', Souhayl: '✅', Hamza: '✅'
-            },
-            { 
-                exercise: 'Squats (Standard)', 
-                target: '4x25',
-                Mohammed: '✅', Ilyass: '✅', Souhayl: '❌', Hamza: '❌'
-            },
-            { 
-                exercise: 'Squats (Pulse)', 
-                target: '4x25',
-                Mohammed: '❌', Ilyass: '✅', Souhayl: '✅', Hamza: '✅'
-            }
-        ];
-    }
 
-    // Actual Google Sheets API call (commented out for now)
+    // Fetch data from Google Sheets API
     async function fetchSheetData() {
-        const range = 'WorkoutData!A:G'; // Adjust range based on your sheet
+        const range = 'WorkoutData!A1:G11'; // Using the exact range you specified
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${range}?key=${API_KEY}`;
         
-        const response = await fetch(url);
-        const data = await response.json();
+        console.log('🌐 Making request to:', url);
         
-        // Transform Sheets data to our format
-        const headers = data.values[0]; // First row: Exercise, Target, Mohammed, Ilyass, etc.
-        return data.values.slice(1).map(row => {
-            const obj = { exercise: row[0], target: row[1] };
-            headers.slice(2).forEach((header, index) => {
-                obj[header] = row[index + 2] || '❌';
-            });
-            return obj;
-        });
+        try {
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ API Error Response:', errorText);
+                throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+            }
+            
+            const data = await response.json();
+            console.log('📄 Raw API response:', data);
+            
+            if (!data.values || !Array.isArray(data.values) || data.values.length === 0) {
+                throw new Error('No data found in the sheet or invalid format');
+            }
+            
+            // Log the first few rows to verify data
+            console.log('📋 First few rows of data:', data.values.slice(0, 3));
+            
+            return data;
+            
+        } catch (error) {
+            console.error('❌ Error in fetchSheetData:', error);
+            throw error; // Re-throw to be caught by the caller
+        }
     }
 
     // Render workout exercises with interactive checkboxes
@@ -251,46 +297,93 @@
         updateProgressDashboard(currentUser);
     }
 
-    // Toggle exercise completion status
-    function toggleExerciseCompletion(exerciseName, button) {
-        const isCompleted = button.classList.contains('completed');
+    // Update exercise status in Google Sheets
+    async function updateSheetExercise(exerciseName, status) {
+        const exercise = workoutData.find(e => e.exercise === exerciseName);
+        if (!exercise) return;
+
+        const row = exercise.rowIndex; // Row in the sheet (1-based)
+        const column = users[currentUser].column; // Column for the current user (D, E, F, or G)
+        const range = `WorkoutData!${column}${row}`;
         
-        if (!isCompleted) {
-            // Mark as completed
-            button.classList.add('completed');
-            button.innerHTML = '✅ Completed';
+        try {
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`;
             
-            // Add celebration effect
-            button.style.transform = 'scale(1.1)';
-            setTimeout(() => {
-                button.style.transform = 'scale(1)';
-            }, 200);
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    range: range,
+                    majorDimension: 'ROWS',
+                    values: [[status]]
+                })
+            });
             
-            // Update local data
-            const exercise = workoutData.find(e => e.exercise === exerciseName);
-            if (exercise) {
-                exercise[currentUser.name] = '✅';
+            if (!response.ok) {
+                throw new Error('Failed to update Google Sheet');
             }
             
-            // Here you would also update Google Sheets
-            // updateSheetExercise(exerciseName, '✅');
-            
-        } else {
-            // Mark as not completed
-            button.classList.remove('completed');
-            button.innerHTML = '❌ Mark Complete';
-            
-            // Update local data
-            const exercise = workoutData.find(e => e.exercise === exerciseName);
-            if (exercise) {
-                exercise[currentUser.name] = '❌';
+            console.log('✅ Successfully updated Google Sheet');
+            return true;
+        } catch (error) {
+            console.error('❌ Error updating Google Sheet:', error);
+            // Revert the UI if the update fails
+            const button = document.querySelector(`[data-exercise="${exerciseName}"]`);
+            if (button) {
+                const newStatus = status === '✅' ? '❌' : '✅';
+                button.classList.toggle('completed');
+                button.innerHTML = newStatus === '✅' ? '✅ Completed' : '❌ Mark Complete';
             }
-            
-            // Here you would also update Google Sheets  
-            // updateSheetExercise(exerciseName, '❌');
+            alert('Failed to update exercise status. Please try again.');
+            return false;
         }
+    }
+
+    // Toggle exercise completion status
+    async function toggleExerciseCompletion(exerciseName, button) {
+        const isCompleted = button.classList.contains('completed');
+        const newStatus = isCompleted ? '❌' : '✅';
         
-        updateProgressDashboard(users[currentUser]);
+        // Update UI immediately for better UX
+        button.disabled = true;
+        const originalHTML = button.innerHTML;
+        button.innerHTML = 'Updating...';
+        
+        try {
+            // Update local data first for instant feedback
+            const exercise = workoutData.find(e => e.exercise === exerciseName);
+            if (exercise) {
+                exercise[currentUser.name] = newStatus;
+            }
+            
+            // Update Google Sheet
+            const success = await updateSheetExercise(exerciseName, newStatus);
+            
+            if (success) {
+                // Update UI to reflect the new state
+                if (newStatus === '✅') {
+                    button.classList.add('completed');
+                    button.innerHTML = '✅ Completed';
+                    // Add celebration effect
+                    button.style.transform = 'scale(1.1)';
+                    setTimeout(() => {
+                        button.style.transform = 'scale(1)';
+                    }, 200);
+                } else {
+                    button.classList.remove('completed');
+                    button.innerHTML = '❌ Mark Complete';
+                }
+                
+                // Update the progress dashboard
+                updateProgressDashboard(users[currentUser]);
+            }
+        } catch (error) {
+            console.error('Error toggling exercise:', error);
+        } finally {
+            button.disabled = false;
+        }
     }
 
     // Update progress dashboard
@@ -389,7 +482,73 @@
             </div>
         `).join('');
     }
+// Debug function - add this to your script
+async function testSheetsConnection() {
+    console.log('=== Testing Sheets Connection ===');
+    console.log('Sheet ID:', SPREADSHEET_ID);
+    console.log('API Key:', API_KEY ? '***' + API_KEY.slice(-4) : 'MISSING');
+    
+    if (!SPREADSHEET_ID || SPREADSHEET_ID === 'YOUR_SHEET_ID_HERE') {
+        console.error('❌ Sheet ID not configured');
+        return;
+    }
+    
+    if (!API_KEY || API_KEY === 'YOUR_API_KEY_HERE') {
+        console.error('❌ API Key not configured');
+        return;
+    }
 
+    try {
+        const testUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?key=${API_KEY}`;
+        console.log('Testing URL:', testUrl);
+        
+        const response = await fetch(testUrl);
+        const data = await response.json();
+        
+        if (response.ok) {
+            console.log('✅ Sheets connection successful!');
+            console.log('Sheet title:', data.properties.title);
+        } else {
+            console.error('❌ Sheets connection failed:', data.error);
+        }
+    } catch (error) {
+        console.error('❌ Network error:', error);
+    }
+}
+
+// Call this function right after your constants
+testSheetsConnection();
+
+
+// Add this debug function
+async function debugSheetData() {
+    console.log('=== Debugging Sheet Data ===');
+    
+    try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/WorkoutData!A1:G11?key=${API_KEY}`;
+        console.log('Fetching URL:', url);
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        console.log('Response status:', response.status);
+        console.log('Full response:', data);
+        
+        if (data.values) {
+            console.log('📊 Sheet data found:');
+            data.values.forEach((row, index) => {
+                console.log(`Row ${index}:`, row);
+            });
+        } else {
+            console.log('❌ No data.values in response');
+        }
+    } catch (error) {
+        console.error('Debug error:', error);
+    }
+}
+
+// Call this right after testSheetsConnection()
+debugSheetData();
     // Logout functionality
     logoutBtn.addEventListener('click', function() {
         currentUser = null;
