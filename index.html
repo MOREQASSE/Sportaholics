@@ -54,7 +54,7 @@
     </div>
 <!--scripts here -->
 <script>
-    // User credentials
+    // User credentials , had 9lawi 4i t5awr walakkin just for testing , kyn chi credits f frontend azbi hhhhhhhhhhhhh
     const users = {
         'reqasse@gmail.com': { 
             password: 'messi101',
@@ -78,9 +78,9 @@
         }
     };
 
-    // Google Sheets Configuration - YOU WILL NEED TO UPDATE THESE
-    const SPREADSHEET_ID = '1ftW6sDYjwkapI7_mfaDmxReT0xZt_mvzmNlQwMjWpwI'; // You'll get this from your Google Sheet URL
-    const API_KEY = 'AIzaSyAiuW33D33_Y8YIr5y6kqX4CYihKgTNUhk'; // You'll create this in Google Cloud Console
+    // Google Sheets Configuration - YOU WILL NEED TO UPDATE THESE ila bdlti sheet obv
+    const SPREADSHEET_ID = '1ftW6sDYjwkapI7_mfaDmxReT0xZt_mvzmNlQwMjWpwI'; // From your Google Sheet URL
+    const API_KEY = 'AIzaSyAiuW33D33_Y8YIr5y6kqX4CYihKgTNUhk'; // Create this in Google Cloud Console
     const SHEET_RANGE = 'WorkoutData!A1:G11';
     // DOM Elements
     const loginScreen = document.getElementById('loginScreen');
@@ -94,7 +94,7 @@
     let currentUser = null;
     let workoutData = [];
 
-    // Check if user is already logged in
+    // Check if user is already logged in - session memory
     function checkExistingLogin() {
         const savedUser = localStorage.getItem('currentUser');
         if (savedUser && users[savedUser]) {
@@ -297,7 +297,7 @@
         updateProgressDashboard(currentUser);
     }
 
-    // Update exercise status in Google Sheets
+    // Update exercise status in Google Sheets  - Hna fin m9awad sway3
     async function updateSheetExercise(exerciseName, status) {
         const exercise = workoutData.find(e => e.exercise === exerciseName);
         if (!exercise) return;
@@ -329,7 +329,7 @@
             return true;
         } catch (error) {
             console.error('❌ Error updating Google Sheet:', error);
-            // Revert the UI if the update fails
+            // Revert the UI if the update fails - Failsafe mechanism
             const button = document.querySelector(`[data-exercise="${exerciseName}"]`);
             if (button) {
                 const newStatus = status === '✅' ? '❌' : '✅';
